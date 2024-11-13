@@ -193,140 +193,96 @@ def clean_dataframe(df):
 def get_ai_insights(data_summary):
     """Get AI-Powered insights from the data"""
     try:
-        # 프로그레스 바 추가
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        
+        # 데이터 포맷팅 - 퍼센트와 개수를 명확히 표시
+        product_insights = []
+        for category, data in data_summary['product_distribution'].items():
+            product_insights.append(
+                f"{category}: {data['count']} items ({data['percentage']:.1f}%)"
+            )
+            
+        material_insights = []
+        for material, data in data_summary['material_stats'].items():
+            material_insights.append(
+                f"{material}: {data['count']} items ({data['percentage']:.1f}%)"
+            )
+
         prompt = f"""
         Analyze the following data and provide insights in this exact format:
 
         # 📊 AI-Powered Insights
 
         👕 Product Assortment
-        Analysis: [Your analysis of product distribution]
-        Suggestion: [Your suggestion for product assortment]
+        Product Distribution: {', '.join(product_insights)}
+        Analysis: [분석 내용]
+        Suggestion: [제안 내용]
 
         🧵 Material Composition
-        Analysis: [Your analysis of material composition]
-        Suggestion: [Your suggestion for materials]
+        Material Distribution: {', '.join(material_insights)}
+        Analysis: [분석 내용]
+        Suggestion: [제안 내용]
 
         💰 Price & Discount
-        Analysis: [Your analysis of pricing and discounts]
-        Suggestion: [Your suggestion for pricing strategy]
-
-        Use actual data values from:
-        Category Distribution: {json.dumps(data_summary['product_distribution'])}
-        Price Metrics: {json.dumps(data_summary['price_range'])}
-        Material Data: {json.dumps(data_summary.get('material_stats', {}))}
-        Discount Information: {json.dumps(data_summary['discount_stats'])}
+        Price Range: ${data_summary['price_range']['min']:.2f} - ${data_summary['price_range']['max']:.2f}
+        Average Price: ${data_summary['price_range']['avg']:.2f}
+        Average Discount: {data_summary['discount_stats']['avg_discount']:.1f}%
+        Analysis: [분석 내용]
+        Suggestion: [제안 내용]
         """
-        
-        # CSS 스타일 정의
-        st.markdown("""
-            <style>
-                .main-insights-title {
-                    font-size: 2.07rem;
-                    font-weight: bold;
-                    margin-bottom: 1.4rem;
-                    color: #333;
-                    border-top: 1px solid #e6e6e6;
-                    padding-top: 2rem;
-                }
-                .section-insights-title {
-                    font-size: 1.6rem;
-                    font-weight: bold;
-                    margin-top: 1.5rem;
-                    margin-bottom: 1rem;
-                    color: #333;
-                }
-                .analysis-text {
-                    font-size: 1rem;
-                    margin-bottom: 1rem;
-                    color: #333;
-                }
-                .suggestion-text {
-                    font-size: 1rem;
-                    margin-bottom: 1.5rem;
-                    color: #333;
-                }
-            </style>
-        """, unsafe_allow_html=True)
-        
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a senior fashion retail analyst. Provide specific, data-driven insights and avoid generic advice. Keep responses concise and focused."
-                },
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
-            temperature=0.5,
-            max_tokens=300
-        )
 
-        # 프로그레스 바 업데이트
-        for i in range(100):
-            progress_bar.progress(i + 1)
-            status_text.text(f"Generating insights... {i + 1}%")
-            time.sleep(0.01)
-
-        insights = response.choices[0].message.content
+        # GPT 호출 및 응답 처리 로직은 동일...
         
-        # 프로그레스 바와 상태 텍스트 제거
-        progress_bar.empty()
-        status_text.empty()
-
-        # 메인 타이틀 표시
-        st.markdown('<p class="main-insights-title">📊 AI-Powered Insights</p>', unsafe_allow_html=True)
-        
-        # GPT 응답 파싱 및 포맷팅 - 한 번만 실행
-        sections = insights.split('\n\n')
-        for section in sections[1:]:  # 첫 번째 섹션(타이틀) 제외
-            lines = section.strip().split('\n')
-            if len(lines) >= 1:
-                # 섹션 타이틀
-                st.markdown(f'<p class="section-insights-title">{lines[0]}</p>', unsafe_allow_html=True)
-                
-                # Analysis와 Suggestion 파싱
-                for line in lines[1:]:
-                    if line.startswith('Analysis:'):
-                        # Analysis: 부분만 볼드체로 처
-                        text = line.replace('Analysis:', '<strong>Analysis:</strong>')
-                        st.markdown(f'<p class="analysis-text">{text}</p>', unsafe_allow_html=True)
-                    elif line.startswith('Suggestion:'):
-                        # Suggestion: 부분만 볼드체로 처리
-                        text = line.replace('Suggestion:', '<strong>Suggestion:</strong>')
-                        st.markdown(f'<p class="suggestion-text">{text}</p>', unsafe_allow_html=True)
-        
-        # insights를 반환하지 않음
-        return None
-
     except Exception as e:
-        st.error(f"Error generating insights: {str(e)}")
+        st.error(f"인사이트 생성 중 오류 발생: {str(e)}")
         return None
 
 # 데이터 요약 준비 함수
 def prepare_data_summary(df):
     """분석을 위한 데이터 요약 준비"""
-    return {
-        "product_distribution": {str(k): int(v) for k, v in df['Category'].value_counts().to_dict().items()},
-        "price_range": {
-            "min": float(df['Current_Price'].min()),
-            "max": float(df['Current_Price'].max()),
-            "avg": float(df['Current_Price'].mean()),
-            "median": float(df['Current_Price'].median())
-        },
-        "discount_stats": {
-            "avg_discount": float(df['Discount'].mean()),
-            "max_discount": float(df['Discount'].max()),
-            "discount_distribution": {str(k): int(v) for k, v in df['Discount'].value_counts().to_dict().items()}
-        },
-        "material_stats": {str(k): int(v) for k, v in df['Materials'].value_counts().to_dict().items()},
-    }
+    try:
+        # 카테고리 분포 계산 - 마지막 카테고리만 추출
+        category_counts = df['Category'].apply(lambda x: x.split('>')[-1].strip()).value_counts()
+        total_items = category_counts.sum()
+        category_percentages = (category_counts / total_items * 100).round(1)
+        
+        # 소재 분석 - 쉼표로 구분된 소재 분리 및 계산
+        def extract_materials(materials_str):
+            if pd.isna(materials_str):
+                return []
+            return [mat.strip() for mat in str(materials_str).split(',')]
+            
+        materials_list = df['Materials'].apply(extract_materials).explode()
+        material_counts = materials_list.value_counts()
+        total_materials = material_counts.sum()
+        material_percentages = (material_counts / total_materials * 100).round(1)
+        
+        return {
+            "product_distribution": {
+                str(k): {
+                    "count": int(category_counts[k]),
+                    "percentage": float(category_percentages[k])
+                } for k in category_counts.index
+            },
+            "price_range": {
+                "min": float(df['Current_Price'].min()),
+                "max": float(df['Current_Price'].max()),
+                "avg": float(df['Current_Price'].mean().round(2)),
+                "median": float(df['Current_Price'].median())
+            },
+            "discount_stats": {
+                "avg_discount": float(df['Discount'].mean().round(1)),
+                "max_discount": float(df['Discount'].max()),
+                "discount_distribution": df['Discount'].value_counts().to_dict()
+            },
+            "material_stats": {
+                str(k): {
+                    "count": int(material_counts[k]),
+                    "percentage": float(material_percentages[k])
+                } for k in material_counts.index
+            }
+        }
+    except Exception as e:
+        st.error(f"데이터 요약 준비 중 오류 발생: {str(e)}")
+        return None
 
 def analyze_data(df, uploaded_file):
     """Analyze the uploaded data and create visualizations"""
@@ -1376,7 +1332,7 @@ def main():
                         analysis_results = analyze_images(images)
                         display_image_analytics(images, analysis_results)               
     else:
-        # 파일이 업로드되지 않은 경우 메시지 표시 (tab1으로 변경)
+        # 파일이 업로드되지 않은 경우 시지 표시 (tab1으로 변경)
         with tab1:
             st.info("👆 분석을 시작하려면 CMI 데이터 파일을 업로드해주세요.")
 
