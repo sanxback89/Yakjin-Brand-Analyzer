@@ -85,8 +85,8 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Initialize OpenAI client with secret key
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+# Initialize OpenAI client with environment variable
+client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
 # Color mapping definition
 color_mapping = {
@@ -121,7 +121,7 @@ color_mapping = {
     'Yellow': '#FFE4BA',     # 파스텔 옐로우
     'Beige': '#FFDFD3',      # 파스텔 베이지
     'Brown': '#E6C9A8',      # 파스텔 브라운
-    'Camel': '#E6CCB2',      # 파스텔 카멜
+    'Camel': '#E6CCB2',      # 파스 카멜
     
     # 기타 파스텔 색상
     'Orange': '#FFD4B8',     # 파스텔 오렌지
@@ -173,7 +173,7 @@ def clean_dataframe(df):
         # Discount가 NaN인 경우 0으로 처리
         df['Discount'] = df['Discount'].fillna(0)
         
-        # 모든 값이 null인 행 제거
+        # 든 값이 null인 행 제거
         df = df.dropna(how='all')
         
         # 컬럼명 변환
@@ -193,32 +193,58 @@ def clean_dataframe(df):
 def get_ai_insights(data_summary):
     """Get AI-Powered insights from the data"""
     try:
-        # 프로그레스 바 추가
+        # 프로그레스 바 추��
         progress_bar = st.progress(0)
         status_text = st.empty()
+        
+        # 4% 미만 필터링 적용된 최종 데이터 계산
+        def filter_low_percentages(data, threshold=4):
+            total = sum(data.values())
+            filtered_data = {k: (v/total)*100 for k, v in data.items() if (v/total)*100 > threshold}
+            # 퍼센트 재계산
+            total_percent = sum(filtered_data.values())
+            return {k: (v/total_percent)*100 for k, v in filtered_data.items()}
+
+        # 각 카테고리별 최종 필터링된 데이터 계산
+        product_dist = filter_low_percentages(data_summary['product_distribution'])
+        material_dist = filter_low_percentages(data_summary.get('material_stats', {}))
         
         prompt = f"""
         Analyze the following data and provide insights in this exact format:
 
-        # 📊 AI-Powered Insights
+        # 📊 AI-Powered Insights by GPT
 
         👕 Product Assortment
-        Analysis: [Your analysis of product distribution]
+        Analysis: [Your analysis based on the filtered product distribution]
         Suggestion: [Your suggestion for product assortment]
 
         🧵 Material Composition
-        Analysis: [Your analysis of material composition]
+        Analysis: [Your analysis based on the filtered material composition]
         Suggestion: [Your suggestion for materials]
 
         💰 Price & Discount
         Analysis: [Your analysis of pricing and discounts]
         Suggestion: [Your suggestion for pricing strategy]
 
-        Use actual data values from:
-        Category Distribution: {json.dumps(data_summary['product_distribution'])}
+        Use these FINAL calculated values:
+        Filtered Product Distribution: {json.dumps(product_dist)}
+        Filtered Material Distribution: {json.dumps(material_dist)}
         Price Metrics: {json.dumps(data_summary['price_range'])}
-        Material Data: {json.dumps(data_summary.get('material_stats', {}))}
         Discount Information: {json.dumps(data_summary['discount_stats'])}
+        
+        Requirements:
+        1. Use ONLY the filtered percentage values shown in charts
+        2. Include specific numbers and percentages that match exactly with the charts
+        3. Focus on buyer-centric insights
+        4. Provide actionable recommendations
+        5. Maintain a professional business tone
+        6. Keep insights concise and focused
+        
+        Important: 
+        1. Use exact percentages as shown in the charts
+        2. For categories, use only the final keyword
+        3. Do not include counts or ratios
+        4. Ensure all percentages match the visual charts exactly
         """
         
         # CSS 스타일 정의
@@ -265,7 +291,7 @@ def get_ai_insights(data_summary):
                 }
             ],
             temperature=0,
-            max_tokens=300
+            max_tokens=350
         )
 
         # 프로그레스 바 업데이트
@@ -281,7 +307,7 @@ def get_ai_insights(data_summary):
         status_text.empty()
 
         # 메인 타이틀 표시
-        st.markdown('<p class="main-insights-title">📊 AI-Powered Insights</p>', unsafe_allow_html=True)
+        st.markdown('<p class="main-insights-title">📊 AI-Powered Insights by GPT</p>', unsafe_allow_html=True)
         
         # GPT 응답 파싱 및 포맷팅 - 한 번만 실행
         sections = insights.split('\n\n')
@@ -312,6 +338,13 @@ def get_ai_insights(data_summary):
 # 데이터 요약 준비 함수
 def prepare_data_summary(df):
     """분석을 위한 데이터 요약 준비"""
+    # Materials 데이터 전처리
+    valid_materials = df['Materials'].apply(lambda x: 
+        x if pd.notna(x) and x != "Unknown 0%" and not x.startswith("Unknown") 
+        else None)
+    
+    material_counts = valid_materials.dropna().value_counts()
+    
     return {
         "product_distribution": {str(k): int(v) for k, v in df['Category'].value_counts().to_dict().items()},
         "price_range": {
@@ -325,8 +358,20 @@ def prepare_data_summary(df):
             "max_discount": float(df['Discount'].max()),
             "discount_distribution": {str(k): int(v) for k, v in df['Discount'].value_counts().to_dict().items()}
         },
-        "material_stats": {str(k): int(v) for k, v in df['Materials'].value_counts().to_dict().items()},
+        "material_stats": {str(k): int(v) for k, v in material_counts.to_dict().items()},
     }
+
+def extract_materials(materials_str):
+    """재질 데이터 추출 및 정제"""
+    if pd.isna(materials_str) or materials_str == "Unknown 0%":
+        return []
+    materials = []
+    for material in str(materials_str).split(','):
+        mat = material.strip().split(' ')[0]
+        # Unknown 0%를 포함하는 재질은 제외
+        if not mat.startswith('Unknown'):
+            materials.append(mat)
+    return materials
 
 def analyze_data(df, uploaded_file):
     """Analyze the uploaded data and create visualizations"""
@@ -409,29 +454,27 @@ def analyze_data(df, uploaded_file):
         )
     )
     
-    # Material Analysis
-    def extract_materials(materials_str):
-        if pd.isna(materials_str):
-            return []
-        materials = []
-        for material in str(materials_str).split(','):
-            mat = material.strip().split(' ')[0]
-            materials.append(mat)
-        return materials
-
-    materials_list = df['Materials'].apply(extract_materials).explode()
+    # Material Analysis - 수정된 부분
+    valid_materials = df['Materials'].apply(lambda x: 
+        x if pd.notna(x) and x != "Unknown 0%" and not x.startswith("Unknown") 
+        else None)
+    
+    materials_list = valid_materials.dropna().str.split(',').explode()
+    materials_list = materials_list.str.strip().str.split(' ').str[0]
     materials_counts = materials_list.value_counts()
     
     # 4% 미만 필터링을 위한 전처리
     total_materials = materials_counts.sum()
-    material_percentages = (materials_counts / total_materials) * 100
-    filtered_materials = material_percentages[material_percentages > 4]  # 4% 초과만 포함
-    
-    # 필터링된 데이터로 데이터프레임 생성
-    materials_dist = pd.DataFrame({
-        'Material': filtered_materials.index,
-        'Count': materials_counts[filtered_materials.index]
-    })
+    if total_materials > 0:
+        material_percentages = (materials_counts / total_materials) * 100
+        filtered_materials = material_percentages[material_percentages > 4]
+        
+        materials_dist = pd.DataFrame({
+            'Material': filtered_materials.index,
+            'Count': materials_counts[filtered_materials.index]
+        })
+    else:
+        materials_dist = pd.DataFrame(columns=['Material', 'Count'])
     
     fig_materials = px.pie(
         materials_dist,
@@ -454,7 +497,7 @@ def analyze_data(df, uploaded_file):
     if 'Color' in df.columns:
         color_counts = df['Color'].value_counts()
         
-        # color_mapping에서 실제 색상값 가져오기
+        # color_mapping에서 실제 색상 가져오기
         colors = [color_mapping.get(color, '#CCCCCC') for color in color_counts.index]
         
         fig_colors = go.Figure(data=[go.Pie(
@@ -472,7 +515,7 @@ def analyze_data(df, uploaded_file):
         # 텍스트 색상 자동 조정
         def get_text_color(background_color):
             """텍스트 색상 자동 조정 함수 수정"""
-            # 연한 회색 배경인 경우에도 검정색 텍스트 사용
+            # 연한 회색 배경인 경에도 검정색 텍스트 사용
             if background_color in ['#F2F2F2', '#F5F5F5']:
                 return '#000000'
             # RGB 값 추출 및 밝기 계산
@@ -506,7 +549,7 @@ def analyze_data(df, uploaded_file):
     # Price Analysis - Separate charts
     categories = df['Category'].apply(lambda x: x.split('>')[-1].strip()).unique()
     
-    # 카테고리가 10개 이상일 때 줄바꿈 적용하��� 함수
+    # 카테고리가 10개 이상일 때 줄바꿈 적용하 함수
     def wrap_category_labels(categories):
         if len(categories) > 10:
             return ['\n'.join(textwrap.wrap(cat, width=15)) for cat in categories]
@@ -1086,51 +1129,6 @@ def analyze_images(images):
     
     return analysis_results
 
-def get_business_insights(data_summary):
-    """영업팀을 위한 비즈니스 인사이트 생성"""
-    try:
-        prompt = f"""
-        패션 산업 전문가로서 다음 데이터를 분석하여 영업팀을 위한 실행 가능한 인사이트를 제공해주세요:
-
-        데이터 요약:
-        {json.dumps(data_summary, indent=2, ensure_ascii=False)}
-
-        다음 영역에 대해 구체적인 분석을 제공해주세요:
-        1. 시장 기회 및 위험 요소
-        2. 가격 전략 및 할인 정책
-        3. 제품 포트폴리오 최적화
-        4. 시즌별 판매 전략
-        5. 구체적인 실행 계획
-
-        응답은 다음 키를 포함한 JSON 형식으로 작성해주세요:
-        - market_analysis
-        - pricing_strategy
-        - portfolio_optimization
-        - seasonal_strategy
-        - action_plan
-        """
-
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You're a fashion apparel vendor sales professional with 15 years of experience. You know all too well what your customers (buyers) want. You translate this into practical and concrete business insights based on data."
-                },
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
-            temperature=0.7
-        )
-
-        return json.loads(response.choices[0].message.content)
-
-    except Exception as e:
-        st.error(f"비즈니스 인사이트 생성 중 오류 발생: {str(e)}")
-        return None
-
 def get_design_insights(image_analysis_results):
     """디자인 인사이트 생성"""
     try:
@@ -1160,7 +1158,7 @@ def get_design_insights(image_analysis_results):
             messages=[
                 {
                     "role": "system",
-                    "content": "당신은 패션 디��인 디렉터입니다. 현재 트렌드와 분석 데이터를 바탕으로 실용적인 디자 인사이트를 제공합니다."
+                    "content": "당신은 패션 디인 디렉터입니다. 현재 트렌드와 분석 데이터를 ���탕으로 실용적인 ��자 인사이트를 제공합니다."
                 },
                 {
                     "role": "user",
@@ -1270,7 +1268,7 @@ def main():
     # 파일 업로드 UI
     uploaded_file = st.file_uploader("Upload CMI Excel File", type=['csv', 'xlsx', 'xls'])
     
-    # Overview 탭을 제거하고 2개의 탭만 생성
+    # Overview 탭을 제거하고 2개의 탭 생성
     tab1, tab2 = st.tabs(["Product Data Analytics", "Image Data Analytics"])
     
     if uploaded_file:
