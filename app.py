@@ -85,8 +85,8 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Initialize OpenAI client with environment variable
-client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+# OpenAI API key setup (fetched from Streamlit Cloud secrets)
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 # Color mapping definition
 color_mapping = {
