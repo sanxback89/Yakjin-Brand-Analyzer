@@ -25,6 +25,9 @@ from io import BytesIO
 from PIL import Image as PILImage
 import plotly.io as pio
 
+# OpenAI API key setup (fetched from Streamlit Cloud secrets)
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+
 # Configure page settings
 st.set_page_config(
     page_title="Yakjin - Brand Analysis",
@@ -84,13 +87,6 @@ st.markdown("""
         }
     </style>
 """, unsafe_allow_html=True)
-
-# OpenAI API key setup
-try:
-    client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-except Exception as e:
-    st.error("OpenAI API 키 설정에 실패했습니다. 관리자에게 문의하세요.")
-    st.stop()
 
 # Color mapping definition
 color_mapping = {
