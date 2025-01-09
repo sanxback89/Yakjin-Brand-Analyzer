@@ -87,19 +87,7 @@ st.markdown("""
 
 # OpenAI API key setup
 try:
-    # 먼저 환경 변수에서 API 키 확인
-    api_key = os.getenv("OPENAI_API_KEY")
-    
-    # 환경 변수에 없다면 Streamlit secrets에서 확인
-    if not api_key:
-        api_key = st.secrets.get("OPENAI_API_KEY")
-        
-    # API 키가 없으면 에러 발생
-    if not api_key:
-        raise ValueError("OpenAI API key not found")
-        
-    client = OpenAI(api_key=api_key)
-    
+    client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 except Exception as e:
     st.error("OpenAI API 키 설정에 실패했습니다. 관리자에게 문의하세요.")
     st.stop()
