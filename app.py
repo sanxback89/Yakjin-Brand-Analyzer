@@ -85,8 +85,24 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# OpenAI API key setup (fetched from Streamlit Cloud secrets)
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+# OpenAI API key setup
+try:
+    # 먼저 환경 변수에서 API 키 확인
+    api_key = os.getenv("OPENAI_API_KEY")
+    
+    # 환경 변수에 없다면 Streamlit secrets에서 확인
+    if not api_key:
+        api_key = st.secrets.get("OPENAI_API_KEY")
+        
+    # API 키가 없으면 에러 발생
+    if not api_key:
+        raise ValueError("OpenAI API key not found")
+        
+    client = OpenAI(api_key=api_key)
+    
+except Exception as e:
+    st.error("OpenAI API 키 설정에 실패했습니다. 관리자에게 문의하세요.")
+    st.stop()
 
 # Color mapping definition
 color_mapping = {
@@ -193,7 +209,7 @@ def clean_dataframe(df):
 def get_ai_insights(data_summary):
     """Get AI-Powered insights from the data"""
     try:
-        # 프로그레스 바 추��
+        # 프로그레스 바 추가
         progress_bar = st.progress(0)
         status_text = st.empty()
         
@@ -1158,7 +1174,7 @@ def get_design_insights(image_analysis_results):
             messages=[
                 {
                     "role": "system",
-                    "content": "당신은 패션 디인 디렉터입니다. 현재 트렌드와 분석 데이터를 ���탕으로 실용적인 ��자 인사이트를 제공합니다."
+                    "content": "당신은 패션 디인 디렉터입니다. 현재 트렌드와 분석 데이터를 탕으로 실용적인 자 인사이트를 제공합니다."
                 },
                 {
                     "role": "user",
